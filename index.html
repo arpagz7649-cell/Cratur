@@ -1,36 +1,156 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catur Anjing Knight</title>
+    <title>Knight vs Dogs - Tactical Chess</title>
     <style>
-        body { background: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        /* Papan Catur Sederhana */
-        .board { 
-            display: grid; 
-            grid-template-columns: repeat(5, 60px); 
-            grid-template-rows: repeat(5, 60px); 
-            border: 4px solid #555; 
-        }
-        .cell { width: 60px; height: 60px; display: flex; justify-content: center; align-items: center; font-size: 30px; }
-        .white { background: #eee; }
-        .black { background: #888; }
+        :root { --bg: #121212; --tile-w: #ebecd0; --tile-b: #779556; --highlight: rgba(255, 255, 0, 0.5); }
+        body { background-color: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; overflow-x: hidden; }
         
-        /* Gaya karakter */
-        .knight { color: blue; font-weight: bold; }
-        .dog { filter: grayscale(1); }
-        .pawn { color: red; }
+        h2 { margin: 20px 0 10px; color: #ff8b00; text-transform: uppercase; letter-spacing: 2px; }
+        
+        /* Container Papan */
+        #chess-board { 
+            display: grid; 
+            grid-template-columns: repeat(8, 12.5vw); 
+            grid-template-rows: repeat(8, 12.5vw); 
+            width: 100vw; height: 100vw; 
+            max-width: 500px; max-height: 500px;
+            border: 5px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .tile { display: flex; justify-content: center; align-items: center; font-size: 2rem; cursor: pointer; position: relative; }
+        .white { background-color: var(--tile-w); }
+        .black { background-color: var(--tile-b); }
+        
+        /* Status & Piece */
+        .piece { z-index: 2; transition: transform 0.2s; user-select: none; }
+        .piece.knight { color: #222; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3)); }
+        .piece.dog { font-size: 1.5rem; filter: sepia(1) saturate(2); }
+        .piece.pawn { color: #f00; }
+
+        .legal-move::after {
+            content: ''; width: 20px; height: 20px; background: var(--highlight); border-radius: 50%; position: absolute;
+        }
+
+        .info { padding: 20px; text-align: center; max-width: 500px; line-height: 1.5; color: #ccc; }
+        .btn-reset { background: #ff8b00; border: none; padding: 10px 20px; color: white; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="board">
-        <div class="cell white"></div><div class="cell black"></div><div class="cell white"></div><div class="cell black"></div><div class="cell white"></div>
-        <div class="cell black"></div><div class="cell white">🐕</div><div class="cell black">♟️</div><div class="cell white">🐕</div><div class="cell black"></div>
-        <div class="cell white"></div><div class="cell black">🐕</div><div class="cell white">🐕</div><div class="cell black">🐕</div><div class="cell white"></div>
-        <div class="cell black"></div><div class="cell white">♙</div><div class="cell black">♙</div><div class="cell white">♙</div><div class="cell black"></div>
-        <div class="cell white"></div><div class="cell black"></div><div class="cell white" style="background: yellow;">♞</div><div class="cell black"></div><div class="cell white"></div>
+    <h2>Knight Escape</h2>
+
+    <div id="chess-board"></div>
+
+    <div class="info">
+        <strong>Misi:</strong> Pion kamu (♙) terkunci oleh barisan Anjing (🐕). <br>
+        Klik <strong>Kuda (♞)</strong> dan lompatlah ke area musuh untuk menghancurkan blokade!
+        <br>
+        <button class="btn-reset" onclick="initBoard()">Reset Papan</button>
     </div>
 
+    <script>
+        const board = document.getElementById('chess-board');
+        let selectedPiece = null;
+        let legalMoves = [];
+
+        // Inisialisasi Papan 8x8
+        function initBoard() {
+            board.innerHTML = '';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const tile = document.createElement('div');
+                    tile.classList.add('tile');
+                    tile.classList.add((r + c) % 2 === 0 ? 'white' : 'black');
+                    tile.dataset.row = r;
+                    tile.dataset.col = c;
+                    
+                    // Taruh Anjing (Barisan penghalang di baris 3 & 4)
+                    if (r === 3 || (r === 2 && c > 1 && c < 6)) {
+                        const dog = createPiece('🐕', 'dog');
+                        tile.appendChild(dog);
+                    }
+                    
+                    // Taruh Pion Kamu yang terjebak
+                    if (r === 4 && c > 1 && c < 6) {
+                        tile.appendChild(createPiece('♙', 'pawn'));
+                    }
+
+                    // Taruh Kuda (Satu-satunya yang bisa jalan)
+                    if (r === 6 && c === 4) {
+                        tile.appendChild(createPiece('♞', 'knight'));
+                    }
+
+                    tile.onclick = () => handleTileClick(r, c);
+                    board.appendChild(tile);
+                }
+            }
+        }
+
+        function createPiece(icon, type) {
+            const span = document.createElement('span');
+            span.innerText = icon;
+            span.classList.add('piece', type);
+            return span;
+        }
+
+        function handleTileClick(r, c) {
+            const clickedTile = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+            const piece = clickedTile.querySelector('.piece');
+
+            // Jika klik pada Kuda
+            if (piece && piece.classList.contains('knight')) {
+                clearHighlights();
+                selectedPiece = { r, c, element: piece };
+                showKnightMoves(r, c);
+            } 
+            // Jika klik pada petak tujuan yang legal
+            else if (legalMoves.some(m => m.r === r && m.c === c)) {
+                movePiece(r, c);
+            } else {
+                clearHighlights();
+            }
+        }
+
+        function showKnightMoves(r, c) {
+            const moves = [
+                {r: r-2, c: c-1}, {r: r-2, c: c+1},
+                {r: r+2, c: c-1}, {r: r+2, c: c+1},
+                {r: r-1, c: c-2}, {r: r-1, c: c+2},
+                {r: r+1, c: c-2}, {r: r+1, c: c+2}
+            ];
+
+            moves.forEach(m => {
+                if (m.r >= 0 && m.r < 8 && m.c >= 0 && m.c < 8) {
+                    const targetTile = document.querySelector(`[data-row="${m.r}"][data-col="${m.c}"]`);
+                    // Kuda bisa melompati apapun, tapi tidak bisa hinggap di petak yang ada unit sendiri (pawn)
+                    if (!targetTile.querySelector('.pawn')) {
+                        targetTile.classList.add('legal-move');
+                        legalMoves.push(m);
+                    }
+                }
+            });
+        }
+
+        function movePiece(r, c) {
+            const targetTile = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+            // Jika ada anjing di situ, makan anjingnya!
+            const enemy = targetTile.querySelector('.piece');
+            if (enemy) enemy.remove();
+
+            targetTile.appendChild(selectedPiece.element);
+            clearHighlights();
+            selectedPiece = null;
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.tile').forEach(t => t.classList.remove('legal-move'));
+            legalMoves = [];
+        }
+
+        initBoard();
+    </script>
 </body>
 </html>
